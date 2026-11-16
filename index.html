@@ -16,25 +16,57 @@
 <body>
   <div id="app">
     <div class="stage" id="stage">
-      <section id="screen-start" class="screen">
+      <section id="screen-home" class="screen">
         <div class="cloud cloud-a" aria-hidden="true"></div>
         <div class="cloud cloud-b" aria-hidden="true"></div>
         <div class="brand-block">
           <div class="logo-row" id="start-preview"></div>
           <h1 class="game-title">单词消消看</h1>
           <p class="game-tagline">看图识词，三张配成一组就能消掉</p>
-          <p class="pack-subtitle" id="pack-subtitle">译林版小学英语三年级</p>
+          <p class="disclaimer" id="home-disclaimer">适合学习江苏译林小学英语。本游戏由创界科技制作，不是译林出版社的官方产品。</p>
         </div>
-        <div class="start-actions">
-          <button type="button" class="btn-primary" id="btn-pack-yilin">译林版</button>
-          <button type="button" class="btn-secondary" id="btn-pack-fun">趣味入门</button>
+        <div class="course-list" id="course-list">
+          <button type="button" class="btn-primary course-btn" id="btn-course-yilin3" data-course="yilin3">译林三年级</button>
+          <button type="button" class="course-btn is-locked" id="btn-course-yilin4" data-course="yilin4" disabled>译林四年级<span class="soon-tag">即将开放</span></button>
+          <button type="button" class="course-btn is-locked" id="btn-course-yilin5" data-course="yilin5" disabled>译林五年级<span class="soon-tag">即将开放</span></button>
+          <button type="button" class="course-btn is-locked" id="btn-course-yilin6" data-course="yilin6" disabled>译林六年级<span class="soon-tag">即将开放</span></button>
+          <button type="button" class="course-btn is-locked" id="btn-course-ket" data-course="ket" disabled>KET<span class="soon-tag">即将开放</span></button>
+          <button type="button" class="course-btn is-locked" id="btn-course-pet" data-course="pet" disabled>PET<span class="soon-tag">即将开放</span></button>
+          <button type="button" class="btn-secondary course-btn" id="btn-course-fun" data-course="fun">趣味入门</button>
           <p class="credit">创界科技</p>
         </div>
       </section>
 
+      <section id="screen-books" class="screen hidden">
+        <header class="nav-header">
+          <button type="button" class="nav-back" id="btn-books-back">返回</button>
+          <h2 id="books-title">译林三年级</h2>
+        </header>
+        <p class="disclaimer">先选上册或下册。适合学习江苏译林小学英语，不是出版社的官方产品。</p>
+        <div class="choice-list">
+          <button type="button" class="choice-btn" id="btn-book-3a" data-book="3a">
+            <span class="choice-title">上册</span>
+            <span class="choice-sub">三年级上</span>
+          </button>
+          <button type="button" class="choice-btn" id="btn-book-3b" data-book="3b">
+            <span class="choice-title">下册</span>
+            <span class="choice-sub">三年级下</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="screen-units" class="screen hidden">
+        <header class="nav-header">
+          <button type="button" class="nav-back" id="btn-units-back">返回</button>
+          <h2 id="units-title">上册</h2>
+        </header>
+        <div class="choice-list" id="unit-list"></div>
+        <button type="button" class="text-home" id="btn-units-home">课程首页</button>
+      </section>
+
       <section id="screen-game" class="screen hidden">
         <header class="game-header">
-          <div class="level-badge">第 <span id="level-num">1</span> 关 · <span id="level-name">入门</span></div>
+          <div class="level-badge"><button type="button" class="icon-back" id="btn-back" aria-label="返回">←</button> 第 <span id="level-num">1</span> 关 · <span id="level-name">入门</span></div>
           <div class="sets-left">剩余 <span id="sets-left">6</span> 组</div>
           <div class="helpers">
             <button type="button" class="helper-btn" id="btn-undo" aria-label="撤销">

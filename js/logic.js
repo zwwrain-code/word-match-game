@@ -147,8 +147,130 @@
     return deck;
   }
 
-  function buildState(cfg, fitted, slots, rand) {
-    const deck = makeDeck(cfg.words);
+  const REVIEW_STORAGE_KEY = "wordmatch-review-bag-v1";
+
+  /**
+   * 下一关要带上的复习词数量：大约 20%–30%，词袋很少时至少 1–2 个。
+   */
+  function reviewSlotCount(capacity, available) {
+    if (!available || available <= 0 || !capacity) return 0;
+    if (available === 1) return 1;
+    let want = Math.round(capacity * 0.25);
+    if (want < 2) want = 2;
+    let ceiling = Math.round(capacity * 0.3);
+    if (ceiling < 2) ceiling = 2;
+    if (want > ceiling) want = ceiling;
+    if (want > available) want = available;
+    if (want > capacity - 1) want = capacity - 1;
+    return want;
+  }
+
+  /**
+   * 用完整的英+中+图词组替换关卡末尾的词，总数保持不变。
+   */
+  function injectReviewWords(baseWords, reviewIds, isKnown) {
+    const capacity = baseWords.length;
+    const seen = {};
+    const fresh = [];
+    (reviewIds || []).forEach(function (id) {
+      if (!id || seen[id]) return;
+      if (isKnown && !isKnown(id)) return;
+      seen[id] = true;
+      fresh.push(id);
+    });
+    const n = reviewSlotCount(capacity, fresh.length);
+    const chosen = fresh.slice(0, n);
+    const chosenSet = {};
+    chosen.forEach(function (id) {
+      chosenSet[id] = true;
+    });
+    const rest = baseWords.filter(function (id) {
+      return !chosenSet[id];
+    });
+    const words = chosen.concat(rest).slice(0, capacity);
+    return { words: words, reviewIds: chosen };
+  }
+
+  function createReviewBag() {
+    return { items: {} };
+  }
+
+  function markProblematic(bag, wordId, info) {
+    if (!bag || !wordId) return bag;
+    if (!bag.items) bag.items = {};
+    info = info || {};
+    bag.items[wordId] = {
+      wordId: wordId,
+      reason: info.reason || "failed",
+      courseId: info.courseId || "",
+      bookId: info.bookId || "",
+      unitId: info.unitId || "",
+    };
+    return bag;
+  }
+
+  function markCleanClear(bag, wordId) {
+    if (bag && bag.items && wordId && bag.items[wordId]) delete bag.items[wordId];
+    return bag;
+  }
+
+  function problematicWordIds(state) {
+    const ids = {};
+    if (!state || !state.cards) return [];
+    state.cards.forEach(function (card) {
+      if (card.status === "board" || card.status === "tray") ids[card.wordId] = true;
+    });
+    return Object.keys(ids);
+  }
+
+  function saveReviewBag(bag, storage) {
+    if (!storage) return;
+    storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(bag || createReviewBag()));
+  }
+
+  function loadReviewBag(storage) {
+    if (!storage) return createReviewBag();
+    try {
+      const raw = storage.getItem(REVIEW_STORAGE_KEY);
+      if (!raw) return createReviewBag();
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.items !== "object" || !parsed.items) return createReviewBag();
+      return { items: parsed.items };
+    } catch (err) {
+      return createReviewBag();
+    }
+  }
+
+  /**
+   * 同一单元的下一关带上本单元的复习词；同一册后面的单元只带 1–2 个。
+   */
+  function selectReviewIds(bag, spec, isKnown) {
+    spec = spec || {};
+    const items = (bag && bag.items) || {};
+    const ids = Object.keys(items).filter(function (id) {
+      return !isKnown || isKnown(id);
+    });
+    if (spec.mode === "next-level") {
+      const sameUnit = ids.filter(function (id) {
+        return items[id].unitId === spec.unitId;
+      });
+      if (sameUnit.length) return sameUnit;
+      return ids.filter(function (id) {
+        return items[id].bookId && items[id].bookId === spec.bookId;
+      });
+    }
+    if (spec.mode === "later-unit") {
+      return ids
+        .filter(function (id) {
+          return items[id].bookId && items[id].bookId === spec.bookId;
+        })
+        .slice(0, 2);
+    }
+    return [];
+  }
+
+  function buildState(cfg, words, fitted, slots, rand) {
+    const deck = makeDeck(words);
     shuffleInPlace(deck, rand);
     const cards = deck.map(function (d, i) {
       const s = fitted[i];
@@ -171,7 +293,7 @@
     return {
       levelId: cfg.id,
       levelName: cfg.name,
-      wordIds: cfg.words.slice(),
+      wordIds: words.slice(),
       cards: cards,
       tray: [],
       undoLeft: cfg.undo,
@@ -183,18 +305,25 @@
     };
   }
 
-  function createLevel(levelId, boardW, boardH, rand) {
+  function createLevel(levelId, boardW, boardH, rand, options) {
     const cfg = getLevelConfig(levelId);
+    options = options || {};
+    const known = function (id) {
+      return !!(WORDS_API.getWord && WORDS_API.getWord(id));
+    };
+    const mixed = injectReviewWords(cfg.words, options.reviewIds || [], known);
+    const words = mixed.words;
     const slots = generateSlots(cfg.layout);
     const fitted = fitSlots(slots, boardW || 360, boardH || 500, 8);
-    if (makeDeck(cfg.words).length !== fitted.length) {
+    if (makeDeck(words).length !== fitted.length) {
       throw new Error(
-        "Slot/card count mismatch for level " + levelId + ": " + makeDeck(cfg.words).length + " vs " + fitted.length
+        "Slot/card count mismatch for level " + levelId + ": " + makeDeck(words).length + " vs " + fitted.length
       );
     }
     let fallback = null;
     for (let attempt = 0; attempt < 60; attempt++) {
-      const state = buildState(cfg, fitted, slots, rand);
+      const state = buildState(cfg, words, fitted, slots, rand);
+      state.reviewWordIds = mixed.reviewIds.slice();
       fallback = state;
       if (isGreedilySolvable(clone(state), rand)) {
         state.dealSolvable = true;
@@ -204,6 +333,7 @@
     }
     fallback.dealSolvable = false;
     fallback.dealAttempts = 60;
+    fallback.reviewWordIds = mixed.reviewIds.slice();
     return fallback;
   }
 
@@ -596,6 +726,16 @@
     shuffleBoard: shuffleBoard,
     refitCards: refitCards,
     isGreedilySolvable: isGreedilySolvable,
+    REVIEW_STORAGE_KEY: REVIEW_STORAGE_KEY,
+    reviewSlotCount: reviewSlotCount,
+    injectReviewWords: injectReviewWords,
+    createReviewBag: createReviewBag,
+    markProblematic: markProblematic,
+    markCleanClear: markCleanClear,
+    problematicWordIds: problematicWordIds,
+    saveReviewBag: saveReviewBag,
+    loadReviewBag: loadReviewBag,
+    selectReviewIds: selectReviewIds,
   };
 
   root.WordMatchLogic = api;

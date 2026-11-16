@@ -7,9 +7,12 @@
   const Logic = window.WordMatchLogic;
   const Words = window.WordMatchWords;
   const AudioX = window.WordMatchAudio;
+  const SESSION_KEY = "wordmatch-session-v1";
 
   const els = {
-    start: document.getElementById("screen-start"),
+    home: document.getElementById("screen-home"),
+    books: document.getElementById("screen-books"),
+    units: document.getElementById("screen-units"),
     game: document.getElementById("screen-game"),
     board: document.getElementById("board"),
     tray: document.getElementById("tray"),
@@ -21,13 +24,13 @@
     setsLeft: document.getElementById("sets-left"),
     undoCount: document.getElementById("undo-count"),
     shuffleCount: document.getElementById("shuffle-count"),
-    btnPackYilin: document.getElementById("btn-pack-yilin"),
-    btnPackFun: document.getElementById("btn-pack-fun"),
-    packSubtitle: document.getElementById("pack-subtitle"),
     btnUndo: document.getElementById("btn-undo"),
     btnShuffle: document.getElementById("btn-shuffle"),
     startPreview: document.getElementById("start-preview"),
     stage: document.getElementById("stage"),
+    unitList: document.getElementById("unit-list"),
+    unitsTitle: document.getElementById("units-title"),
+    booksTitle: document.getElementById("books-title"),
   };
 
   let state = null;
@@ -37,6 +40,54 @@
   let modalOpen = false;
   let inputLocked = false;
   let celebrateTimer = null;
+  let reviewBag = Logic.loadReviewBag(openStore("local"));
+  let place = { courseId: "", bookId: "", unitId: "", entryMode: "fresh" };
+
+  function openStore(kind) {
+    try {
+      const store = kind === "session" ? window.sessionStorage : window.localStorage;
+      const probe = "__wm_probe";
+      store.setItem(probe, "1");
+      store.removeItem(probe);
+      return store;
+    } catch (err) {
+      const mem = {};
+      return {
+        getItem: function (key) {
+          return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : null;
+        },
+        setItem: function (key, value) {
+          mem[key] = String(value);
+        },
+        removeItem: function (key) {
+          delete mem[key];
+        },
+      };
+    }
+  }
+
+  function loadSession() {
+    try {
+      const raw = openStore("session").getItem(SESSION_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && Array.isArray(parsed.unitsStarted)) return parsed;
+    } catch (err) {
+      /* 空会话 */
+    }
+    return { courseId: "", bookId: "", unitsStarted: [] };
+  }
+
+  function saveSession(session) {
+    try {
+      openStore("session").setItem(SESSION_KEY, JSON.stringify(session));
+    } catch (err) {
+      /* 忽略无法写入的会话 */
+    }
+  }
+
+  function persistBag() {
+    Logic.saveReviewBag(reviewBag, openStore("local"));
+  }
 
   function escapeHtml(s) {
     return String(s)
@@ -47,7 +98,7 @@
   }
 
   function cardInner(card) {
-    const word = Words.getWord(card.wordId);
+    const word = Words.getWord(card.wordId) || Words.lookup(card.wordId);
     if (!word) return "";
     if (card.type === "en") {
       const len = word.en.length;
@@ -70,57 +121,78 @@
   }
 
   function miniCardHtml(wordId, type) {
-    const fake = { wordId: wordId, type: type };
-    return '<div class="mini-card">' + cardInner(fake) + "</div>";
+    return '<div class="mini-card">' + cardInner({ wordId: wordId, type: type }) + "</div>";
   }
 
-  function currentPack() {
-    return Words.getActivePack ? Words.getActivePack() : null;
+  function renderHomePreview() {
+    const id = "apple";
+    els.startPreview.innerHTML = miniCardHtml(id, "en") + miniCardHtml(id, "zh") + miniCardHtml(id, "img");
   }
 
-  function packWord(kind, fallback) {
-    const pack = currentPack();
-    const id = pack && pack[kind];
-    if (id && Words.getWord(id)) return id;
-    return fallback;
+  function showScreen(name) {
+    els.home.classList.toggle("hidden", name !== "home");
+    els.books.classList.toggle("hidden", name !== "books");
+    els.units.classList.toggle("hidden", name !== "units");
+    els.game.classList.toggle("hidden", name !== "game");
   }
 
-  function previewWordId() {
-    const pack = currentPack();
-    if (pack && pack.id === "fun") return packWord("previewWord", "cat");
-    return packWord("previewWord", "apple");
+  function showHome() {
+    hideOverlay();
+    showScreen("home");
   }
 
-  function tipWordId() {
-    const pack = currentPack();
-    if (pack && pack.id === "fun") return packWord("tipWord", "dog");
-    return packWord("tipWord", "apple");
+  function showBooks() {
+    const course = Words.getCourse("yilin3");
+    if (els.booksTitle && course) els.booksTitle.textContent = course.name;
+    hideOverlay();
+    showScreen("books");
   }
 
-  function renderStartPreview() {
-    const id = previewWordId();
-    els.startPreview.innerHTML =
-      miniCardHtml(id, "en") + miniCardHtml(id, "zh") + miniCardHtml(id, "img");
-  }
-
-  function updateStartPage() {
-    const pack = currentPack();
-    if (els.packSubtitle) {
-      if (pack && pack.id === "yilin") {
-        els.packSubtitle.textContent = pack.subtitle || "译林版小学英语三年级";
-        els.packSubtitle.classList.remove("hidden");
-      } else {
-        els.packSubtitle.textContent = "";
-        els.packSubtitle.classList.add("hidden");
-      }
+  function showUnits(bookId) {
+    const book = Words.getBooks("yilin3").filter(function (item) {
+      return item.id === bookId;
+    })[0];
+    if (!book) {
+      showBooks();
+      return;
     }
-    renderStartPreview();
-  }
-
-  function returnToStart() {
-    Words.setActivePack("yilin");
-    updateStartPage();
-    showScreen("start");
+    place.courseId = "yilin3";
+    place.bookId = bookId;
+    els.unitsTitle.textContent = book.name;
+    els.unitList.innerHTML = book.units
+      .map(function (unit) {
+        if (!unit.playable) {
+          return (
+            '<button type="button" class="choice-btn is-locked" disabled data-unit="' +
+            escapeHtml(unit.id) +
+            '"><span class="choice-title">' +
+            escapeHtml(unit.label) +
+            " " +
+            escapeHtml(unit.title) +
+            '</span><span class="choice-sub"><span class="soon-tag">即将开放</span></span></button>'
+          );
+        }
+        return (
+          '<button type="button" class="choice-btn" data-unit="' +
+          escapeHtml(unit.id) +
+          '"><span class="choice-title">' +
+          escapeHtml(unit.label) +
+          " " +
+          escapeHtml(unit.title) +
+          '</span><span class="choice-sub">' +
+          unit.levels.length +
+          " 关</span></button>"
+        );
+      })
+      .join("");
+    Array.prototype.forEach.call(els.unitList.querySelectorAll("button[data-unit]"), function (btn) {
+      if (btn.disabled) return;
+      btn.addEventListener("click", function () {
+        beginUnit("yilin3", bookId, btn.getAttribute("data-unit"));
+      });
+    });
+    hideOverlay();
+    showScreen("units");
   }
 
   function boardSize() {
@@ -130,9 +202,27 @@
     return { w: w, h: h };
   }
 
+  function knownWord(id) {
+    return !!Words.getWord(id);
+  }
+
+  function reviewIdsFor(levelId) {
+    if (levelId > 1) {
+      return Logic.selectReviewIds(
+        reviewBag,
+        { mode: "next-level", unitId: place.unitId, bookId: place.bookId },
+        knownWord
+      );
+    }
+    if (place.entryMode === "later-unit") {
+      return Logic.selectReviewIds(reviewBag, { mode: "later-unit", bookId: place.bookId }, knownWord);
+    }
+    return [];
+  }
+
   function createAndBindLevel(levelId) {
     const size = boardSize();
-    state = Logic.createLevel(levelId, size.w, size.h);
+    state = Logic.createLevel(levelId, size.w, size.h, null, { reviewIds: reviewIdsFor(levelId) });
     visualTray = [];
     flying.clear();
     inputLocked = false;
@@ -143,8 +233,9 @@
 
   function renderHeader() {
     if (!state) return;
+    const unit = Words.getActiveUnit();
     els.levelNum.textContent = String(state.levelId);
-    els.levelName.textContent = state.levelName;
+    els.levelName.textContent = unit && unit.title ? unit.title : state.levelName;
     els.setsLeft.textContent = String(Logic.remainingSetCount(state));
     els.undoCount.textContent = String(state.undoLeft);
     els.shuffleCount.textContent = String(state.shuffleLeft);
@@ -172,7 +263,11 @@
     el.dataset.id = card.id;
     el.dataset.word = card.wordId;
     el.dataset.type = card.type;
-    el.setAttribute("aria-label", (Words.getWord(card.wordId) || {}).en + " " + (card.type === "en" ? "英文" : card.type === "zh" ? "中文" : "图片"));
+    const word = Words.getWord(card.wordId);
+    el.setAttribute(
+      "aria-label",
+      (word ? word.en : card.wordId) + " " + (card.type === "en" ? "英文" : card.type === "zh" ? "中文" : "图片")
+    );
     el.innerHTML = cardInner(card);
     applyCardBox(el, card);
     const blocked = Logic.isBlocked(card, state.cards);
@@ -248,11 +343,6 @@
     }
   }
 
-  function showScreen(name) {
-    els.start.classList.toggle("hidden", name !== "start");
-    els.game.classList.toggle("hidden", name !== "game");
-  }
-
   function hideOverlay() {
     els.overlay.classList.add("hidden");
     els.modal.innerHTML = "";
@@ -312,6 +402,11 @@
     }
   }
 
+  function tipWordId() {
+    const pack = Words.getActivePack();
+    return pack && pack.tipWord && Words.getWord(pack.tipWord) ? pack.tipWord : "apple";
+  }
+
   function showTipThenPlay(levelId) {
     if (levelId === 1) {
       showOverlay(
@@ -332,15 +427,14 @@
       });
       return;
     }
-    const cfg = Logic.getLevelConfig(levelId);
     showOverlay(
       "<h2>第 " +
-        cfg.id +
+        state.levelId +
         " 关</h2>" +
         "<p>" +
-        escapeHtml(cfg.name) +
+        escapeHtml(state.levelName) +
         " · 一共 " +
-        cfg.words.length +
+        state.wordIds.length +
         " 组单词</p>" +
         '<div class="modal-actions">' +
         '<button type="button" class="btn-primary" id="modal-ok">开始挑战</button>' +
@@ -349,6 +443,15 @@
     document.getElementById("modal-ok").addEventListener("click", function () {
       hideOverlay();
     });
+  }
+
+  function leaveToMenu() {
+    hideOverlay();
+    if (place.courseId === "yilin3" && place.bookId) {
+      showUnits(place.bookId);
+      return;
+    }
+    showHome();
   }
 
   function showWin() {
@@ -363,30 +466,48 @@
       "<h2>你赢了！</h2>" +
         "<p>第 " +
         state.levelId +
-        " 关完成啦，单词记牢了吗？</p>" +
+        " 关完成啦，没记住的词会在下一关再出现。</p>" +
         '<div class="modal-actions">' +
         '<button type="button" class="btn-primary" id="modal-next">下一关</button>' +
+        '<button type="button" class="btn-secondary" id="modal-back">返回</button>' +
         "</div>"
     );
     document.getElementById("modal-next").addEventListener("click", function () {
       hideOverlay();
       startLevel(state.levelId + 1);
     });
+    document.getElementById("modal-back").addEventListener("click", leaveToMenu);
+  }
+
+  function noteFailure() {
+    const info = {
+      reason: "failed",
+      courseId: place.courseId,
+      bookId: place.bookId,
+      unitId: place.unitId,
+    };
+    Logic.problematicWordIds(state).forEach(function (id) {
+      Logic.markProblematic(reviewBag, id, info);
+    });
+    persistBag();
   }
 
   function showLose() {
+    noteFailure();
     AudioX.playLose();
     showOverlay(
       "<h2>槽位满了</h2>" +
-        "<p>底部七个格子装满啦。试试先凑齐一组，或者用撤销、洗牌帮帮忙。</p>" +
+        "<p>底部七个格子装满啦。没消掉的词会记下来，下一关再见面。</p>" +
         '<div class="modal-actions">' +
         '<button type="button" class="btn-primary" id="modal-retry">再试一次</button>' +
+        '<button type="button" class="btn-secondary" id="modal-back">返回</button>' +
         "</div>"
     );
     document.getElementById("modal-retry").addEventListener("click", function () {
       hideOverlay();
       startLevel(state.levelId);
     });
+    document.getElementById("modal-back").addEventListener("click", leaveToMenu);
   }
 
   function recordSessionWords() {
@@ -417,14 +538,19 @@
         );
       })
       .join("");
+    const backLabel = place.courseId === "yilin3" ? "返回单元" : "返回";
     showOverlay(
-      "<h2>全部通关！</h2>" +
-        "<p>本局记住了这些单词，点一点可以听发音。</p>" +
+      "<h2>本单元完成！</h2>" +
+        "<p>这些单词都消掉了，点一点可以听发音。再玩一次会回到这一单元的第 1 关。</p>" +
         '<ul class="review-list">' +
         items +
         "</ul>" +
         '<div class="modal-actions">' +
-        '<button type="button" class="btn-primary" id="modal-restart">再玩一次</button>' +
+        '<button type="button" class="btn-primary" id="modal-replay">再玩一次</button>' +
+        '<button type="button" class="btn-secondary" id="modal-unit">' +
+        backLabel +
+        "</button>" +
+        '<button type="button" class="btn-secondary" id="modal-home">课程首页</button>' +
         "</div>"
     );
     burstConfetti();
@@ -434,17 +560,18 @@
         if (w) AudioX.speak(w.en);
       });
     });
-    document.getElementById("modal-restart").addEventListener("click", function () {
+    document.getElementById("modal-replay").addEventListener("click", function () {
       hideOverlay();
       sessionWords = [];
-      returnToStart();
+      startLevel(1);
     });
+    document.getElementById("modal-unit").addEventListener("click", leaveToMenu);
+    document.getElementById("modal-home").addEventListener("click", showHome);
   }
 
   function startLevel(levelId) {
     showScreen("game");
     hideCelebrate();
-    // 先显示棋盘容器再测量尺寸
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         createAndBindLevel(levelId);
@@ -466,7 +593,6 @@
     cardEl.classList.remove("entering");
     cardEl.classList.add("flying");
     cardEl.classList.remove("blocked", "free");
-    // 强制从当前位置开始过渡
     cardEl.style.left = from.left - boardRect.left + "px";
     cardEl.style.top = from.top - boardRect.top + "px";
     cardEl.style.width = from.width + "px";
@@ -530,6 +656,8 @@
       renderTray();
 
       if (matched) {
+        Logic.markCleanClear(reviewBag, matched.wordId);
+        persistBag();
         matched.cardIds.forEach(function (id) {
           const el = els.tray.querySelector('[data-id="' + id + '"]');
           if (el) el.classList.add("matching");
@@ -540,10 +668,8 @@
             if (el) el.classList.add("cleared-out");
           });
           setTimeout(function () {
-            if (state.clearedWords.indexOf(matched.wordId) !== -1) {
-              if (sessionWords.indexOf(matched.wordId) === -1) {
-                sessionWords.push(matched.wordId);
-              }
+            if (state.clearedWords.indexOf(matched.wordId) !== -1 && sessionWords.indexOf(matched.wordId) === -1) {
+              sessionWords.push(matched.wordId);
             }
             visualTray = state.tray.slice();
             renderTray();
@@ -573,6 +699,16 @@
     AudioX.unlock();
     const result = Logic.undo(state);
     if (!result.ok) return;
+    const card = Logic.findCard(state, result.cardId);
+    if (card) {
+      Logic.markProblematic(reviewBag, card.wordId, {
+        reason: "undo",
+        courseId: place.courseId,
+        bookId: place.bookId,
+        unitId: place.unitId,
+      });
+      persistBag();
+    }
     hideCelebrate();
     flying.clear();
     visualTray = state.tray.slice();
@@ -597,7 +733,6 @@
     if (!state || els.game.classList.contains("hidden")) return;
     const size = boardSize();
     Logic.refitCards(state, size.w, size.h);
-    // 飞行中的牌不强制重排，直接以最新坐标刷新静止牌
     Array.prototype.forEach.call(els.board.querySelectorAll(".card"), function (el) {
       if (el.classList.contains("flying")) return;
       const card = Logic.findCard(state, el.dataset.id);
@@ -605,28 +740,61 @@
     });
   }
 
-  function choosePackAndStart(packId) {
+  function beginUnit(courseId, bookId, unitId) {
+    if (!Words.setActiveUnit(courseId, bookId, unitId)) return;
     AudioX.unlock();
-    Words.setActivePack(packId);
-    updateStartPage();
+    const sess = loadSession();
+    let entryMode = "fresh";
+    const sameBook =
+      sess.courseId === courseId && sess.bookId === bookId && sess.unitsStarted.indexOf(unitId) === -1 && sess.unitsStarted.length > 0;
+    if (sameBook) entryMode = "later-unit";
+    if (sess.courseId !== courseId || sess.bookId !== bookId) {
+      sess.courseId = courseId;
+      sess.bookId = bookId;
+      sess.unitsStarted = [];
+    }
+    if (sess.unitsStarted.indexOf(unitId) === -1) sess.unitsStarted.push(unitId);
+    sess.courseId = courseId;
+    sess.bookId = bookId;
+    saveSession(sess);
+    place = { courseId: courseId, bookId: bookId, unitId: unitId, entryMode: entryMode };
     sessionWords = [];
     startLevel(1);
   }
 
-  els.btnPackYilin.addEventListener("click", function () {
-    choosePackAndStart("yilin");
+  function onCourseClick(courseId) {
+    const course = Words.getCourse(courseId);
+    if (!course || !course.playable) return;
+    AudioX.unlock();
+    if (courseId === "fun") {
+      beginUnit("fun", "fun-book", "fun-main");
+      return;
+    }
+    if (courseId === "yilin3") showBooks();
+  }
+
+  document.querySelectorAll("#course-list .course-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      onCourseClick(btn.getAttribute("data-course"));
+    });
   });
-  els.btnPackFun.addEventListener("click", function () {
-    choosePackAndStart("fun");
+  document.getElementById("btn-book-3a").addEventListener("click", function () {
+    showUnits("3a");
+  });
+  document.getElementById("btn-book-3b").addEventListener("click", function () {
+    showUnits("3b");
+  });
+  document.getElementById("btn-books-back").addEventListener("click", showHome);
+  document.getElementById("btn-units-back").addEventListener("click", showBooks);
+  document.getElementById("btn-units-home").addEventListener("click", showHome);
+  document.getElementById("btn-back").addEventListener("click", function () {
+    if (modalOpen) return;
+    leaveToMenu();
   });
   els.btnUndo.addEventListener("click", onUndo);
   els.btnShuffle.addEventListener("click", onShuffle);
   els.overlay.addEventListener("click", function (ev) {
-    if (ev.target === els.overlay) {
-      // 提示页允许点遮罩关闭；胜负页必须点按钮
-      const ok = document.getElementById("modal-ok");
-      if (ok) hideOverlay();
-    }
+    if (ev.target === els.overlay && document.getElementById("modal-ok")) hideOverlay();
   });
 
   window.addEventListener("resize", onResize);
@@ -634,6 +802,6 @@
     window.visualViewport.addEventListener("resize", onResize);
   }
 
-  updateStartPage();
+  renderHomePreview();
   window.__wordMatchStartLevel = startLevel;
 })();
