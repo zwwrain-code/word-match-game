@@ -154,7 +154,7 @@ button:disabled {
 #screen-start {
   align-items: center;
   justify-content: center;
-  gap: 48px;
+  gap: 36px;
   padding: 36px 24px 18px;
   text-align: center;
 }
@@ -230,6 +230,17 @@ button:disabled {
   font-weight: 500;
 }
 
+.pack-subtitle {
+  margin: 10px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--teal);
+  letter-spacing: 1px;
+}
+.pack-subtitle.hidden {
+  display: none;
+}
+
 .start-actions {
   width: 100%;
   position: relative;
@@ -237,7 +248,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   margin-bottom: 0;
 }
 
@@ -266,15 +277,17 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 160px;
+  min-width: 220px;
   min-height: 48px;
   padding: 0 22px;
   border-radius: 999px;
   background: linear-gradient(180deg, #fff 0%, #fff4d6 100%);
   color: var(--ink);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
+  letter-spacing: 1px;
   box-shadow: 0 4px 0 #e0c48a, 0 8px 16px var(--shadow);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 .btn-secondary:active {
   transform: translateY(2px);
