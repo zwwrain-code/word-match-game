@@ -1,0 +1,52 @@
+# Deploy the playable static site to GitHub Pages.
+# The artifact is only index.html, css/, js/, and assets/.
+# test/ stays in the repository and is not published.
+name: Deploy static content to Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assemble playable site
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          cp -R css js assets _site/
+          test -f _site/index.html
+          test -d _site/css
+          test -d _site/js
+          test -d _site/assets
+          test ! -e _site/test
+          test ! -e _site/README.md
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
