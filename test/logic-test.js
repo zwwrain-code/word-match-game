@@ -10,6 +10,8 @@ require("../js/logic.js");
 const Words = globalThis.WordMatchWords;
 const Logic = globalThis.WordMatchLogic;
 
+Words.setActivePack("fun");
+
 let passed = 0;
 let failed = 0;
 const errors = [];
@@ -397,6 +399,77 @@ function greedyPlay(levelId, seed) {
   }
   assert(wins === trials, "第 " + levelId + " 关发牌可解 " + trials + "/" + trials, "成功 " + wins + (details.length ? " " + details.join(", ") : ""));
 });
+
+console.log("\n9) 译林版词包结构");
+(function () {
+  assert(typeof Words.setActivePack === "function" && typeof Words.getActivePack === "function", "导出 setActivePack / getActivePack");
+  assert(!!Words.PACKS && !!Words.PACKS.fun && !!Words.PACKS.yilin, "导出 PACKS.fun 与 PACKS.yilin");
+
+  const ok = Words.setActivePack("yilin");
+  assert(ok, "可切换到译林版");
+  assert(Words.getActivePack().id === "yilin", "当前包为译林版");
+
+  const expected = {
+    red: "红色",
+    yellow: "黄色",
+    blue: "蓝色",
+    green: "绿色",
+    cap: "帽子",
+    jacket: "夹克衫",
+    cake: "蛋糕",
+    egg: "鸡蛋",
+    pencil: "铅笔",
+    schoolbag: "书包",
+    book: "书",
+    ruler: "尺",
+    bird: "鸟",
+    duck: "鸭子",
+    pig: "猪",
+    cow: "奶牛",
+    apple: "苹果",
+    pear: "梨",
+  };
+  const ids = Object.keys(Words.WORDS);
+  assert(ids.length === 18, "译林版恰好 18 个单词", "实际 " + ids.length);
+  Object.keys(expected).forEach(function (id) {
+    const w = Words.getWord(id);
+    assert(!!w && !!Words.WORDS[id], "译林版单词存在: " + id);
+    assert(w && w.id === id && w.en === id && w.zh === expected[id] && !!w.category, "译林版词条正确: " + id, w ? JSON.stringify(w) : "missing");
+    assert(Words.getImageSrc(id) === "assets/word-" + id + ".jpg", "译林版配图路径: " + id);
+    assert(!!Words.getIllustration(id) && Words.getIllustration(id).indexOf(".jpg") !== -1, "译林版配图存在: " + id);
+  });
+
+  assert(Words.LEVELS.length === 3, "译林版恰好 3 关");
+  const expectedLevels = [
+    ["red", "yellow", "blue", "cap", "cake", "apple"],
+    ["green", "jacket", "egg", "pencil", "schoolbag", "book", "ruler", "bird", "pear"],
+    ["apple", "cake", "book", "bird", "duck", "pig", "cow", "pear", "pencil", "schoolbag", "cap", "egg"],
+  ];
+  const layouts = ["pile", "mountain", "peak"];
+  Words.LEVELS.forEach(function (lv, i) {
+    assert(lv.id === i + 1, "译林版第 " + (i + 1) + " 关 id 正确");
+    assert(lv.words.length === expectedLevels[i].length, "译林版第 " + lv.id + " 关为 " + expectedLevels[i].length + " 词", "实际 " + lv.words.length);
+    assert(JSON.stringify(lv.words) === JSON.stringify(expectedLevels[i]), "译林版第 " + lv.id + " 关词表正确", JSON.stringify(lv.words));
+    assert(lv.undo === 2 && lv.shuffle === 2, "译林版第 " + lv.id + " 关道具为 2/2");
+    assert(lv.layout === layouts[i], "译林版第 " + lv.id + " 关布局为 " + layouts[i]);
+    lv.words.forEach(function (id) {
+      assert(!!Words.WORDS[id], "译林版第 " + lv.id + " 关每个 id 都有词条: " + id);
+    });
+  });
+  assert(Words.LEVELS[0].words.length === 6, "译林版第 1 关 6 词");
+  assert(Words.LEVELS[1].words.length === 9, "译林版第 2 关 9 词");
+  assert(Words.LEVELS[2].words.length === 12, "译林版第 3 关 12 词");
+
+  const yilinState = Logic.createLevel(1, 360, 500, seededRand(5));
+  assert(yilinState.cards.length === 18, "译林版第 1 关生成 18 张牌", "实际 " + yilinState.cards.length);
+  assert(yilinState.wordIds.indexOf("cat") === -1 && yilinState.wordIds.indexOf("apple") !== -1, "译林版关卡使用译林词表");
+
+  Words.setActivePack("fun");
+  assert(Words.getActivePack().id === "fun", "可切回趣味入门");
+  assert(Object.keys(Words.WORDS).length === 17, "趣味入门仍为 17 词", "实际 " + Object.keys(Words.WORDS).length);
+  assert(!!Words.WORDS.cat && !!Words.WORDS.dog, "趣味入门保留 cat/dog");
+  assert(Words.LEVELS[0].words[0] === "cat", "趣味入门第 1 关仍以 cat 开头");
+})();
 
 console.log("\n==========");
 console.log("通过 " + passed + "，失败 " + failed);

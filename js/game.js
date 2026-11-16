@@ -21,7 +21,9 @@
     setsLeft: document.getElementById("sets-left"),
     undoCount: document.getElementById("undo-count"),
     shuffleCount: document.getElementById("shuffle-count"),
-    btnStart: document.getElementById("btn-start"),
+    btnPackYilin: document.getElementById("btn-pack-yilin"),
+    btnPackFun: document.getElementById("btn-pack-fun"),
+    packSubtitle: document.getElementById("pack-subtitle"),
     btnUndo: document.getElementById("btn-undo"),
     btnShuffle: document.getElementById("btn-shuffle"),
     startPreview: document.getElementById("start-preview"),
@@ -72,9 +74,53 @@
     return '<div class="mini-card">' + cardInner(fake) + "</div>";
   }
 
+  function currentPack() {
+    return Words.getActivePack ? Words.getActivePack() : null;
+  }
+
+  function packWord(kind, fallback) {
+    const pack = currentPack();
+    const id = pack && pack[kind];
+    if (id && Words.getWord(id)) return id;
+    return fallback;
+  }
+
+  function previewWordId() {
+    const pack = currentPack();
+    if (pack && pack.id === "fun") return packWord("previewWord", "cat");
+    return packWord("previewWord", "apple");
+  }
+
+  function tipWordId() {
+    const pack = currentPack();
+    if (pack && pack.id === "fun") return packWord("tipWord", "dog");
+    return packWord("tipWord", "apple");
+  }
+
   function renderStartPreview() {
+    const id = previewWordId();
     els.startPreview.innerHTML =
-      miniCardHtml("cat", "en") + miniCardHtml("cat", "zh") + miniCardHtml("cat", "img");
+      miniCardHtml(id, "en") + miniCardHtml(id, "zh") + miniCardHtml(id, "img");
+  }
+
+  function updateStartPage() {
+    const pack = currentPack();
+    if (els.packSubtitle) {
+      if (pack && pack.id === "yilin") {
+        els.packSubtitle.textContent = pack.subtitle || "译林版小学英语三年级";
+        els.packSubtitle.classList.remove("hidden");
+      } else {
+        els.packSubtitle.textContent = "";
+        els.packSubtitle.classList.add("hidden");
+      }
+    }
+    renderStartPreview();
+  }
+
+  function returnToStart() {
+    Words.setActivePack("yilin");
+    updateStartPage();
+    showScreen("start");
   }
 
   function boardSize() {
@@ -271,9 +317,9 @@
       showOverlay(
         '<div class="tip-icon" aria-hidden="true">💡</div>' +
           ' <div class="tip-cards">' +
-          miniCardHtml("dog", "en") +
-          miniCardHtml("dog", "zh") +
-          miniCardHtml("dog", "img") +
+          miniCardHtml(tipWordId(), "en") +
+          miniCardHtml(tipWordId(), "zh") +
+          miniCardHtml(tipWordId(), "img") +
           "</div>" +
           "<h2>怎么玩</h2>" +
           "<p>点英文、中文和图片，三张配成一组就能消掉。</p>" +
@@ -391,7 +437,7 @@
     document.getElementById("modal-restart").addEventListener("click", function () {
       hideOverlay();
       sessionWords = [];
-      showScreen("start");
+      returnToStart();
     });
   }
 
@@ -559,10 +605,19 @@
     });
   }
 
-  els.btnStart.addEventListener("click", function () {
+  function choosePackAndStart(packId) {
     AudioX.unlock();
+    Words.setActivePack(packId);
+    updateStartPage();
     sessionWords = [];
     startLevel(1);
+  }
+
+  els.btnPackYilin.addEventListener("click", function () {
+    choosePackAndStart("yilin");
+  });
+  els.btnPackFun.addEventListener("click", function () {
+    choosePackAndStart("fun");
   });
   els.btnUndo.addEventListener("click", onUndo);
   els.btnShuffle.addEventListener("click", onShuffle);
@@ -579,6 +634,6 @@
     window.visualViewport.addEventListener("resize", onResize);
   }
 
-  renderStartPreview();
+  updateStartPage();
   window.__wordMatchStartLevel = startLevel;
 })();
