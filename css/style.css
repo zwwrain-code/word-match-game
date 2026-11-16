@@ -150,13 +150,17 @@ button:disabled {
   display: none;
 }
 
-/* ========== 开始页 ========== */
-#screen-start {
+/* ========== 课程首页 / 分册 / 单元 ========== */
+#screen-home,
+#screen-books,
+#screen-units {
   align-items: center;
-  justify-content: center;
-  gap: 36px;
-  padding: 36px 24px 18px;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 22px 18px 18px;
   text-align: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .brand-block {
@@ -230,15 +234,128 @@ button:disabled {
   font-weight: 500;
 }
 
-.pack-subtitle {
-  margin: 10px 0 0;
-  font-size: 15px;
+.disclaimer {
+  margin: 10px auto 0;
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.course-list,
+.choice-list {
+  width: 100%;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 8px;
+}
+
+.course-btn {
+  width: min(100%, 280px);
+}
+
+.course-btn.is-locked,
+.course-btn:disabled,
+.choice-btn:disabled {
+  opacity: 1;
+  background: #efe8dc;
+  color: #8a8296;
+  box-shadow: none;
+  cursor: default;
+}
+
+.soon-tag {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  background: #f4c430;
+  color: #5c4a12;
+  border-radius: 999px;
+  padding: 2px 8px;
+  vertical-align: 2px;
+}
+
+.nav-header {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 72px 1fr 72px;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.nav-header h2,
+#units-title,
+#books-title {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 28px;
+  color: #ff6b3d;
+  font-weight: 400;
+}
+
+.nav-back,
+.text-home,
+.icon-back {
   font-weight: 700;
   color: var(--teal);
-  letter-spacing: 1px;
 }
-.pack-subtitle.hidden {
-  display: none;
+
+.nav-back,
+.text-home {
+  min-height: 36px;
+  font-size: 15px;
+}
+
+.text-home {
+  margin: 8px 0 12px;
+}
+
+.choice-btn {
+  width: min(100%, 300px);
+  min-height: 64px;
+  border-radius: 18px;
+  background: #fffdf8;
+  box-shadow: 0 4px 0 #e0c48a, 0 8px 16px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 14px;
+}
+
+.choice-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #e0c48a;
+}
+
+.choice-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.choice-sub {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.icon-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  border-radius: 999px;
+  background: rgba(42, 157, 143, 0.12);
+  font-size: 16px;
 }
 
 .start-actions {
@@ -344,6 +461,7 @@ button:disabled {
 .level-badge {
   color: var(--accent-dark);
   justify-self: start;
+  max-width: 100%;
 }
 .sets-left {
   color: var(--teal);

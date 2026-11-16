@@ -400,75 +400,162 @@ function greedyPlay(levelId, seed) {
   assert(wins === trials, "第 " + levelId + " 关发牌可解 " + trials + "/" + trials, "成功 " + wins + (details.length ? " " + details.join(", ") : ""));
 });
 
-console.log("\n9) 译林版词包结构");
+console.log("\n9) 课程、单元和趣味入门");
 (function () {
-  assert(typeof Words.setActivePack === "function" && typeof Words.getActivePack === "function", "导出 setActivePack / getActivePack");
-  assert(!!Words.PACKS && !!Words.PACKS.fun && !!Words.PACKS.yilin, "导出 PACKS.fun 与 PACKS.yilin");
-
-  const ok = Words.setActivePack("yilin");
-  assert(ok, "可切换到译林版");
-  assert(Words.getActivePack().id === "yilin", "当前包为译林版");
-
-  const expected = {
-    red: "红色",
-    yellow: "黄色",
-    blue: "蓝色",
-    green: "绿色",
-    cap: "帽子",
-    jacket: "夹克衫",
-    cake: "蛋糕",
-    egg: "鸡蛋",
-    pencil: "铅笔",
-    schoolbag: "书包",
-    book: "书",
-    ruler: "尺",
-    bird: "鸟",
-    duck: "鸭子",
-    pig: "猪",
-    cow: "奶牛",
-    apple: "苹果",
-    pear: "梨",
-  };
-  const ids = Object.keys(Words.WORDS);
-  assert(ids.length === 18, "译林版恰好 18 个单词", "实际 " + ids.length);
-  Object.keys(expected).forEach(function (id) {
-    const w = Words.getWord(id);
-    assert(!!w && !!Words.WORDS[id], "译林版单词存在: " + id);
-    assert(w && w.id === id && w.en === id && w.zh === expected[id] && !!w.category, "译林版词条正确: " + id, w ? JSON.stringify(w) : "missing");
-    assert(Words.getImageSrc(id) === "assets/word-" + id + ".jpg", "译林版配图路径: " + id);
-    assert(!!Words.getIllustration(id) && Words.getIllustration(id).indexOf(".jpg") !== -1, "译林版配图存在: " + id);
+  const fs = require("fs");
+  const path = require("path");
+  const order = ["yilin3", "yilin4", "yilin5", "yilin6", "ket", "pet", "fun"];
+  order.forEach(function (id) {
+    assert(!!Words.getCourse(id), "课程存在: " + id);
   });
+  ["yilin4", "yilin5", "yilin6", "ket", "pet"].forEach(function (id) {
+    const course = Words.getCourse(id);
+    assert(course.playable === false && course.comingSoon === true, id + " 标记为即将开放");
+    assert(Words.setActiveCourse(id) === false, id + " 不能进入游戏");
+    assert(Words.setActiveUnit(id, "x", "y") === false, id + " 没有可玩单元");
+  });
+  assert(Words.getCourse("yilin3").playable === true, "译林三年级可玩");
+  assert(Words.getCourse("fun").playable === true && Words.getCourse("fun").secondary === true, "趣味入门是次要选项");
+  assert(Words.DISCLAIMER.indexOf("不是译林出版社的官方产品") !== -1, "有非官方说明");
+  assert(Words.DISCLAIMER.indexOf("译林官方") === -1 && Words.DISCLAIMER.indexOf("正版教材") === -1, "说明里不写官方或正版");
 
-  assert(Words.LEVELS.length === 3, "译林版恰好 3 关");
-  const expectedLevels = [
-    ["red", "yellow", "blue", "cap", "cake", "apple"],
-    ["green", "jacket", "egg", "pencil", "schoolbag", "book", "ruler", "bird", "pear"],
-    ["apple", "cake", "book", "bird", "duck", "pig", "cow", "pear", "pencil", "schoolbag", "cap", "egg"],
-  ];
-  const layouts = ["pile", "mountain", "peak"];
-  Words.LEVELS.forEach(function (lv, i) {
-    assert(lv.id === i + 1, "译林版第 " + (i + 1) + " 关 id 正确");
-    assert(lv.words.length === expectedLevels[i].length, "译林版第 " + lv.id + " 关为 " + expectedLevels[i].length + " 词", "实际 " + lv.words.length);
-    assert(JSON.stringify(lv.words) === JSON.stringify(expectedLevels[i]), "译林版第 " + lv.id + " 关词表正确", JSON.stringify(lv.words));
-    assert(lv.undo === 2 && lv.shuffle === 2, "译林版第 " + lv.id + " 关道具为 2/2");
-    assert(lv.layout === layouts[i], "译林版第 " + lv.id + " 关布局为 " + layouts[i]);
-    lv.words.forEach(function (id) {
-      assert(!!Words.WORDS[id], "译林版第 " + lv.id + " 关每个 id 都有词条: " + id);
+  const books = Words.getBooks("yilin3");
+  assert(books.length === 2 && books[0].name === "上册" && books[1].name === "下册", "三年级有上册和下册");
+  const playable = [];
+  const locked = [];
+  books.forEach(function (book) {
+    book.units.forEach(function (unit) {
+      if (unit.playable) playable.push(book.id + ":" + unit.id);
+      else locked.push(unit);
     });
   });
-  assert(Words.LEVELS[0].words.length === 6, "译林版第 1 关 6 词");
-  assert(Words.LEVELS[1].words.length === 9, "译林版第 2 关 9 词");
-  assert(Words.LEVELS[2].words.length === 12, "译林版第 3 关 12 词");
+  assert(playable.join(",") === "3a:3a-u56,3a:3a-u78,3b:3b-u12,3b:3b-u34,3b:3b-u7", "可玩单元正确", playable.join(","));
+  locked.forEach(function (unit) {
+    assert(unit.playable === false && unit.levels.length === 0 && unit.reason, "未开放单元有原因: " + unit.label);
+  });
 
-  const yilinState = Logic.createLevel(1, 360, 500, seededRand(5));
-  assert(yilinState.cards.length === 18, "译林版第 1 关生成 18 张牌", "实际 " + yilinState.cards.length);
-  assert(yilinState.wordIds.indexOf("cat") === -1 && yilinState.wordIds.indexOf("apple") !== -1, "译林版关卡使用译林词表");
+  const sizes = { pile: 6, mountain: 9, peak: 12 };
+  books.forEach(function (book) {
+    book.units.forEach(function (unit) {
+      if (!unit.playable) return;
+      assert(unit.levels.length >= 1 && unit.levels.length <= 3, unit.label + " 有 1–3 关", String(unit.levels.length));
+      const ok = Words.setActiveUnit("yilin3", book.id, unit.id);
+      assert(ok, "可进入 " + unit.label);
+      unit.levels.forEach(function (lv) {
+        assert(sizes[lv.layout] === lv.words.length, unit.label + " 第 " + lv.id + " 关词数匹配布局", lv.layout + " " + lv.words.length);
+        assert(lv.undo === 2 && lv.shuffle === 2, unit.label + " 第 " + lv.id + " 关道具为 2/2");
+        const unique = {};
+        lv.words.forEach(function (id) {
+          unique[id] = true;
+          const w = Words.getWord(id);
+          assert(!!w && w.zh && w.en, unit.label + " 词条存在: " + id);
+          assert(id.toLowerCase() !== "orange" && String(w.en).toLowerCase().indexOf("orange") === -1, "没有 orange: " + id);
+        });
+        assert(Object.keys(unique).length === lv.words.length, unit.label + " 第 " + lv.id + " 关不重复");
+        const state = Logic.createLevel(lv.id, 360, 500, seededRand(80 + lv.id));
+        assert(state.cards.length === lv.words.length * 3, unit.label + " 第 " + lv.id + " 关能发牌");
+      });
+    });
+  });
+
+  const all = Words.listPlayableWords();
+  Object.keys(all).forEach(function (id) {
+    const w = all[id];
+    assert(String(id).toLowerCase() !== "orange" && String(w.en).toLowerCase().indexOf("orange") === -1, "词库不含 orange: " + id);
+    const file = path.join(__dirname, "..", Words.getImageSrc(id));
+    assert(fs.existsSync(file) && fs.statSync(file).size > 1000, "配图文件存在: " + id);
+  });
 
   Words.setActivePack("fun");
   assert(Words.getActivePack().id === "fun", "可切回趣味入门");
   assert(Object.keys(Words.WORDS).length === 17, "趣味入门仍为 17 词", "实际 " + Object.keys(Words.WORDS).length);
   assert(!!Words.WORDS.cat && !!Words.WORDS.dog, "趣味入门保留 cat/dog");
-  assert(Words.LEVELS[0].words[0] === "cat", "趣味入门第 1 关仍以 cat 开头");
+  assert(Words.LEVELS.length === 3 && Words.LEVELS[0].words[0] === "cat", "趣味入门第 1 关仍以 cat 开头");
+  assert(Words.LEVELS[0].layout === "pile" && Words.LEVELS[1].layout === "mountain" && Words.LEVELS[2].layout === "peak", "趣味入门仍用三层牌山");
+})();
+
+console.log("\n10) 复习词袋");
+(function () {
+  assert(Logic.reviewSlotCount(6, 0) === 0, "空词袋不塞复习");
+  assert(Logic.reviewSlotCount(9, 1) === 1, "只有 1 个复习词时带 1 个");
+  assert(Logic.reviewSlotCount(6, 2) === 2, "6 词关至少带 2 个复习词");
+  assert(Logic.reviewSlotCount(9, 5) === 2, "9 词关大约四分之一");
+  assert(Logic.reviewSlotCount(12, 8) === 3, "12 词关大约四分之一");
+
+  Words.setActivePack("fun");
+  const base = Words.LEVELS[1].words.slice();
+  const mixed = Logic.injectReviewWords(base, ["cat", "panda", "nope"], function (id) {
+    return !!Words.WORDS[id];
+  });
+  assert(mixed.words.length === base.length, "注入后词数不变");
+  assert(mixed.reviewIds.join(",") === "cat,panda", "只注入词库里的复习词", mixed.reviewIds.join(","));
+  mixed.reviewIds.forEach(function (id) {
+    assert(mixed.words.indexOf(id) !== -1, "复习词出现在下一关: " + id);
+  });
+  assert(mixed.words.indexOf("nope") === -1, "不存在的词不会注入");
+
+  const state = Logic.createLevel(2, 360, 500, seededRand(4), { reviewIds: ["cat", "panda"] });
+  assert(state.wordIds.length === 9, "带复习的第 2 关仍是 9 组");
+  assert(state.wordIds.indexOf("cat") !== -1 && state.wordIds.indexOf("panda") !== -1, "发牌包含复习词组");
+  const triples = {};
+  state.cards.forEach(function (c) {
+    triples[c.wordId] = triples[c.wordId] || {};
+    triples[c.wordId][c.type] = (triples[c.wordId][c.type] || 0) + 1;
+  });
+  assert(triples.cat.en === 1 && triples.cat.zh === 1 && triples.cat.img === 1, "复习词是完整的英中图");
+
+  const bag = Logic.createReviewBag();
+  Logic.markProblematic(bag, "cat", { reason: "undo", courseId: "fun", bookId: "fun-book", unitId: "fun-main" });
+  Logic.markProblematic(bag, "dog", { reason: "failed", courseId: "yilin3", bookId: "3a", unitId: "3a-u56" });
+  const memory = {
+    data: {},
+    getItem: function (key) { return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null; },
+    setItem: function (key, value) { this.data[key] = String(value); },
+  };
+  Logic.saveReviewBag(bag, memory);
+  const loaded = Logic.loadReviewBag(memory);
+  assert(loaded.items.cat && loaded.items.cat.reason === "undo", "复习词袋可以存进本地存储再读回");
+  Logic.markCleanClear(loaded, "cat");
+  assert(!loaded.items.cat && !!loaded.items.dog, "干净消除后离开词袋");
+
+  const lost = spreadCards(Logic.createLevel(1, 360, 500, seededRand(9)));
+  const seen = {};
+  lost.cards.forEach(function (c) {
+    if (Object.keys(seen).length >= 6) return;
+    if (seen[c.wordId]) return;
+    seen[c.wordId] = c;
+  });
+  Object.keys(seen).forEach(function (id) {
+    Logic.pickCard(lost, seen[id].id);
+  });
+  const extra = lost.cards.find(function (c) {
+    return c.status === "board" && c.wordId === Object.keys(seen)[0];
+  });
+  Logic.pickCard(lost, extra.id);
+  assert(lost.status === "lost", "失败局面已形成");
+  const stuck = Logic.problematicWordIds(lost);
+  assert(stuck.length >= 1, "失败时记下还在槽里或牌山上的词");
+  stuck.forEach(function (id) {
+    const still = lost.cards.some(function (c) {
+      return c.wordId === id && (c.status === "board" || c.status === "tray");
+    });
+    assert(still, "记下的词确实还没消除: " + id);
+  });
+  const cleared = lost.clearedWords.filter(function (id) {
+    return stuck.indexOf(id) !== -1;
+  });
+  assert(cleared.length === 0, "已经消除的词不进失败词袋");
+
+  const nextBag = Logic.createReviewBag();
+  Logic.markProblematic(nextBag, "bird", { reason: "undo", bookId: "3a", unitId: "3a-u56" });
+  Logic.markProblematic(nextBag, "cap", { reason: "failed", bookId: "3a", unitId: "3a-u56" });
+  Logic.markProblematic(nextBag, "pig", { reason: "failed", bookId: "3b", unitId: "3b-u7" });
+  const same = Logic.selectReviewIds(nextBag, { mode: "next-level", unitId: "3a-u56", bookId: "3a" }, function () { return true; });
+  assert(same.indexOf("bird") !== -1 && same.indexOf("cap") !== -1 && same.indexOf("pig") === -1, "同一单元的下一关只带这一单元的词");
+  const later = Logic.selectReviewIds(nextBag, { mode: "later-unit", bookId: "3a" }, function () { return true; });
+  assert(later.length === 2 && later.indexOf("pig") === -1, "同一册后面的单元只带两个复习词");
+
+  Words.setActivePack("fun");
 })();
 
 console.log("\n==========");
